@@ -1,0 +1,101 @@
+---
+- name: Add the user
+  ansible.builtin.user:
+    name: tomcat
+    shell: /bin/false
+    home: /opt/tomcat
+
+- name: update the package
+  shell: 'apt update'
+
+- block:
+  - name: Install jdk
+    ansible.builtin.apt:
+     name: default-jdk
+     state: present
+  rescue: 
+   - name: fail msg
+     fail:
+       msg: "installation jdk failed"
+
+- name: java version
+  shell: 'java -version'
+  register: version
+
+- name: check java version
+  ansible.builtin.debug:
+    msg: "{{version}}"
+
+- name: Download file
+  ansible.builtin.get_url:
+    url: 'https://archive.apache.org/dist/tomcat/tomcat-10/v10.0.8/bin/apache-tomcat-10.0.8.tar.gz'
+    dest: /tmp
+    mode: 0777
+
+
+- name: extract the file
+  shell: 'cd /tmp;tar xzvf /tmp/apache-tomcat-10.0.8.tar.gz -C /opt/tomcat --strip-components=1'
+
+- name: Create a directory if it does not exist
+  ansible.builtin.file:
+    path: /opt/tomcat/bin
+    state: directory
+
+- name: giving permission
+  shell: 'chown -R tomcat:tomcat /opt/tomcat/'
+  args:
+    warn: false
+
+- name: giving permission
+  shell: 'chmod -R u+x /opt/tomcat/bin'
+  args:
+    warn: false
+
+- name: Replace a localhosts entry with our own
+  lineinfile:
+      path: /opt/tomcat/conf/tomcat-users.xml
+      insertbefore: '^</tomcat-users>'
+      line: "{{ item }}"
+  with_items:
+        <!-- user manager can access only manager section -->
+        <role rolename="manager-gui" />
+        <user username="manager" password="goodday" roles="manager-gui" />
+
+        <!-- user admin can access manager and admin section both -->
+        <role rolename="admin-gui" />
+        <user username="admin" password="goodday" roles="manager-gui,admin-gui" />
+- name: Edit manager application
+  lineinfile:
+      path: /opt/tomcat/webapps/manager/META-INF/context.xml
+      insertbefore: '^  <Valve className="org.apache.catalina.valves.RemoteAddrValve'
+      line: '<!-- '
+
+- name: Edit manager aplication
+  lineinfile:
+      path: /opt/tomcat/webapps/manager/META-INF/context.xml
+      insertafter: '0:0:0:0:0:0:0:1" />'
+      line: ' -->'
+- name: Edit host manager application 
+  lineinfile:
+      path: /opt/tomcat/webapps/host-manager/META-INF/context.xml
+      insertbefore: '^<Valve className="org.apache.catalina.valves.RemoteAddrValve'
+      line: '<!-- '
+
+- name: Edit host manager application 
+  lineinfile:
+      path: /opt/tomcat/webapps/host-manager/META-INF/context.xml
+      insertafter: '0:0:0:0:0:0:0:1" />'
+      line: ' -->'
+
+- name: Create a systemd unit file for Apache Tomcat.
+  ansible.builtin.template:  
+    src: /etc/ansible/roles/apache/files/template.service
+    dest: /etc/systemd/system/tomcat.service
+
+- name: Start and Enable Tomcat 10 on sever
+  systemd:
+        name: tomcat
+        state: started
+        enabled: true
+        daemon_reload: true
+

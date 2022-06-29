@@ -1,0 +1,83 @@
+---
+- name: Ensure package is available
+  shell: 'apt search mysql-server'
+  args:
+    warn: false
+  changed_when: true
+  register: package_availability
+
+- name: check the version
+  ansible.builtin.debug:
+    msg: "{{package_availability}}"
+
+- block:
+  - name: Install mysqli
+    ansible.builtin.apt:
+     name: mysql-server
+     state: present
+    with_items:
+              - mysql-server
+              - mysql-client
+              - python-mysqldb
+              - MySQL-python
+              - PyMySQL 
+  rescue:
+   - name: fail msg
+     fail:
+       msg: "installation mysql is failed"
+
+- name: Install Required pip modules
+  pip:
+    name:
+      - PyMySQL
+    state: present
+    executable: pip3
+
+- name: Create a directory if it does not exist
+  ansible.builtin.file:
+    path: /var/log/mysql_logs
+    state: directory
+
+- name: create log files
+  file:
+       path: "{{log_path}}/{{item}}"
+       state: touch
+  with_items:
+        - audit.log
+        - mysql.log
+        - slow-query.log
+
+- name: update ownership of directory mountpoint
+  ansible.builtin.file:
+       path: /var/log/mysql_logs
+       state: directory
+       recurse: yes
+       owner: mysql
+       group: mysql
+
+- name: start mysql service
+  ansible.builtin.service:
+       name: mysql
+       state: restarted
+
+       #- name: Sets the root password
+       #mysql_user:
+       #name: root
+       # password: "{{mysql_root_pass}}"
+
+- name: Create the tungsten user
+  user:
+    name: tungsten
+    shell: /bin/bash
+    groups: mysql
+    comment: Tungsten User
+
+
+- name: Set MySQL root Password
+  mysql_user:
+    login_host: 'localhost'
+    login_user: 'root'
+    login_password: ''
+    name: 'root'
+    password: '{{mysql_root_pass}}'
+    state: present

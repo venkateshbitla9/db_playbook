@@ -1,0 +1,17 @@
+---
+ - hosts: localhost
+   become: true
+   become_method: sudo
+   become_user: root
+   tasks:
+   - block:
+     - include_role:
+         name:  "mysql"
+     rescue:
+     - name: Rescue job
+       debug:
+         msg: "Ansible execution is stooped as pre-requisites are not meet"
+     - name: fail message
+       fail:
+         msg: "Ansible execution failed on the server"
+
